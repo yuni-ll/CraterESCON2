@@ -5,6 +5,14 @@ import time
 from dataclasses import dataclass
 from typing import List, Callable, Optional
 
+_SOF = b'\xAA\x55'
+_FRAME_LEN = 20        
+_HEADER_LEN = 2 
+_CHECKSUM_RANGE = slice(2, 19) 
+_ID_OFFSET = 5  
+_DLC_OFFSET = 9
+_DATA_OFFSET = 10
+
 @dataclass(frozen=True)
 class CANFrame:
     id: int
@@ -20,25 +28,63 @@ class USB2CANAdapter:
         self._thread: Optional[threading.Thread] = None
 
     def send(self, msg_id: int, data: List[int]) -> None:
-        frame = bytearray([0xAA, 0x55, 0x01, 0x01, 0x00])
-        frame += struct.pack('<I', msg_id)
-        frame.append(len(data))
-        frame += bytes(data).ljust(8, b'\x00')
-        frame.append(0x00)
-        frame.append(sum(frame[2:]) & 0xFF) 
+        dlc = len(data)
+       
+        frame = bytearray(_FRAME_LEN)
+        frame[0] = 0xAA
+        frame[1] = 0x55
+        frame[2] = 0x01   
+        frame[3] = 0x01  
+        frame[4] = 0x00
+        struct.pack_into('<I', frame, 5, msg_id)
+        frame[9] = dlc
+        frame[10:10 + dlc] = bytes(data)
+
+        frame[18] = 0x00 
+        frame[19] = sum(frame[_CHECKSUM_RANGE]) & 0xFF  
+ 
         self.ser.write(frame)
 
     def _listen(self) -> None:
+        buf = bytearray()
         while self._running:
-            if self.ser.in_waiting >= 20:
-                if self.ser.read(1) == b'\xAA' and self.ser.read(1) == b'\x55':
-                    body: bytes = self.ser.read(18)
-                    if len(body) == 18 and self._callback:
-                        msg_id: int = struct.unpack('<I', body[3:7])[0]
-                        dlc: int = body[7]
-                        frame = CANFrame(id=msg_id, data=body[8:8+dlc])
-                        self._callback(frame)
-            time.sleep(0.001)
+            b = self.ser.read(1)
+            if not b:
+                continue
+            if b[0] != 0xAA:
+                continue
+ 
+            b = self.ser.read(1)
+            if not b:
+                continue
+            if b[0] != 0x55:
+                continue
+ 
+            body = self.ser.read(18)
+            if len(body) < 18:
+                continue
+ 
+            full_frame = bytearray(_SOF) + bytearray(body)
+ 
+            expected_cs = sum(full_frame[_CHECKSUM_RANGE]) & 0xFF
+            actual_cs = full_frame[19]
+            if expected_cs != actual_cs:
+                print(f"[USB2CAN] checksum error: expected {expected_cs:#04x}, got {actual_cs:#04x} - dropping frame")
+                continue
+ 
+            msg_id = struct.unpack('<I', full_frame[_ID_OFFSET:_ID_OFFSET + 4])[0]
+            dlc = full_frame[_DLC_OFFSET]
+            if dlc > 8:
+                print(f"[USB2CAN] invalid dlc {dlc} — dropping frame")
+                continue
+ 
+            frame = CANFrame(id=msg_id, data=bytes(full_frame[_DATA_OFFSET:_DATA_OFFSET + dlc]))
+ 
+            if self._callback:
+                try:
+                    self._callback(frame)
+                except Exception as exc:
+                    print(f"[USB2CAN] callback raised: {exc}")
 
     def listen(self, callback_func: Callable[[CANFrame], None]) -> None:
         if self._running:
