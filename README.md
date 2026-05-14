@@ -9,7 +9,7 @@ python -m venv .venv
 #### activate 
 - windows:
   ```powershell
-  .venv/bin/activate (windows or macOS/linux)
+  .venv/bin/activate
   ```
 - macOS/linux
   ```bash
