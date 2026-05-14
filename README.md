@@ -1,13 +1,13 @@
 ### CraterESCON2 (for drive motors)
 #### recommendation: run it in a venv
 
-#### create
+#### create:
 ```bash
 python -m venv .venv
 ```
 
-#### activate 
-- windows:
+#### activate:
+- windows
   ```powershell
   .venv\Scripts\activate
   ```
@@ -17,7 +17,7 @@ python -m venv .venv
   ```
 
 
-#### install in editable mode
+#### install in editable mode:
 ```bash
 pip install -e .
 ```
