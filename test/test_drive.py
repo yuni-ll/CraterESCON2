@@ -48,9 +48,8 @@ def main():
         drive1.set_velocity(500)
         drive2.set_velocity(500)
         drive3.set_velocity(300)
-        drive4.set_velocity(-500) # Opposite direction axis test
+        drive4.set_velocity(-500)
         
-        # Let it spin for 5 seconds while tracking the statusword via telemetry
         print("\n streaming: ")
         for _ in range(50):
             s1 = hex(drive1.statusword).upper().ljust(6)
@@ -63,8 +62,8 @@ def main():
             v3 = drive3.actual_velocity
             v4 = drive4.actual_velocity
             
-            print(f"Status | Node1: {s1} (v: {v1}) | Node2: {s2} (v: {v2}) | Node3: {s3} (v: {v3}) | Node4: {s4} (v: {v4})")
-            time.sleep(0.1) #
+            print(f"status | node1: {s1} (v: {v1}) | node2: {s2} (v: {v2}) | node3: {s3} (v: {v3}) | node4: {s4} (v: {v4})")
+            time.sleep(0.1) 
             
         print("\n decelerating... ")
         for drive in drives:
