@@ -33,16 +33,17 @@ class ESCON2:
             self.actual_velocity = struct.unpack('<i', frame.data[2:6])[0]
 
     def write_sdo(self, index: ObjectIndex, subindex: int, data: bytes) -> None:
-        dlc_mask = (4 - len(data)) << 2
-        command_byte = 0x23 | dlc_mask  
+        size = len(data)
+        command_byte = 0x23 | ((4 - size) << 2)
         
         payload = bytearray([command_byte])
         payload += struct.pack('<H', index.value)
         payload.append(subindex)
-        payload += data
+        
+        payload += data.ljust(4, b'\x00') 
         
         self.bus.send(self.rx_sdo_id, list(payload))
-
+        
     def nmt_start(self) -> None:
         # pre-op to op mode
         print(f"[NODE {self.node_id}] nmt command")
