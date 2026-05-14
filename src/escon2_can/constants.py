@@ -1,1 +1,34 @@
+from enum import IntEnum
 
+class ObjectIndex(IntEnum):
+    # OD indices for escon2 (CiA 402)
+    DEVICE_TYPE = 0x1000
+    ERROR_CODE = 0x603F
+    CONTROLWORD = 0x6040
+    STATUSWORD = 0x6041
+  
+    MODE_OF_OPERATION = 0x6060
+    VELOCITY_DEMAND = 0x606B
+    VELOCITY_ACTUAL = 0x606C
+    TARGET_VELOCITY = 0x60FF
+    PROFILE_ACCELERATION = 0x6083
+    PROFILE_DECELERATION = 0x6084
+    QUICK_STOP_DECEL = 0x6085
+    VELOCITY_WINDOW = 0x606D
+    TORQUE_ACTUAL = 0x6077
+
+class OpMode(IntEnum):
+    # operation modes
+    PROFILE_VELOCITY = 3
+    CYCLIC_SYNC_VELOCITY = 9
+
+class ControlCommand(IntEnum):
+    # controlwords
+    SHUTDOWN = 0x0006 
+    SWITCH_ON = 0x0007  
+    ENABLE_OPERATION = 0x000F 
+    DISABLE_VOLTAGE = 0x0000
+    QUICK_STOP = 0x0002
+    FAULT_RESET = 0x0080 
+    HALT_VELOCITY = 0x010F
+    HALT = 0x010F
