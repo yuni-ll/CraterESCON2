@@ -36,17 +36,51 @@ class ESCON2:
         size = len(data)
         command_byte = 0x23 | ((4 - size) << 2)
         
-        payload = bytearray([command_byte])
-        payload += struct.pack('<H', index.value)
-        payload.append(subindex)
+        payload = bytearray(8)
+        payload[0] = command_byte
+        struct.pack_into('<H', payload, 1, index.value)
+        payload[3] = subindex
+        payload[4:4 + size] = data 
         
-        payload += data.ljust(4, b'\x00') 
-        
+        self._sdo_event.clear()
+        self._sdo_response = None
+ 
         self.bus.send(self.rx_sdo_id, list(payload))
+        
+        responded = self._sdo_event.wait(timeout=_SDO_TIMEOUT)
+ 
+        if not responded:
+            raise TimeoutError(
+                f"[node {self.node_id}] SDO timeout: no response for "
+                f"index={index.name}({index.value:#06x}) sub={subindex:#04x}"
+            )
+ 
+        resp = self._sdo_response
+        if resp is None or len(resp.data) < 1:
+            raise RuntimeError(f"[NODE {self.node_id}] no proper sdo response")
+ 
+        cmd = resp.data[0]
+ 
+        if cmd == _SDO_ABORT:
+            abort_code = 0
+            if len(resp.data) >= 8:
+                abort_code = struct.unpack('<I', resp.data[4:8])[0]
+            description = _ABORT_CODES.get(abort_code, "unknown abort code")
+            raise RuntimeError(
+                f"[node {self.node_id}] sdo abort for "
+                f"index={index.name}({index.value:#06x}) sub={subindex:#04x}: "
+                f"{description} ({abort_code:#010x})"
+            )
+ 
+        if cmd != _SDO_DOWNLOAD_ACK:
+            raise RuntimeError(
+                f"[node {self.node_id}] unexpected sdo response cmd={cmd:#04x} "
+                f"for index={index.name}({index.value:#06x})"
+            )
         
     def nmt_start(self) -> None:
         # pre-op to op mode
-        print(f"[NODE {self.node_id}] nmt command")
+        print(f"[node {self.node_id}] starting nmt command")
         self.bus.send(0x000, [0x01, self.node_id])
 
     def reset_fault(self) -> None:
@@ -62,7 +96,7 @@ class ESCON2:
         self.current_mode = mode
 
     def configure_profile_ramps(self, accel_rpm_s: int, decel_rpm_s: int) -> None:
-        print(f"[NODE {self.node_id}] configuring ramps: Accel={accel_rpm_s}, Decel={decel_rpm_s}") # or is that done in escon studio already
+        print(f"[NODE {self.node_id}] configuring ramps: accel={accel_rpm_s}, decel={decel_rpm_s}") # or is that done in escon studio already
         self.write_sdo(ObjectIndex.PROFILE_ACCELERATION, 0x00, accel_rpm_s.to_bytes(4, 'little', signed=False))
         time.sleep(0.02)
         self.write_sdo(ObjectIndex.PROFILE_DECELERATION, 0x00, decel_rpm_s.to_bytes(4, 'little', signed=False))
