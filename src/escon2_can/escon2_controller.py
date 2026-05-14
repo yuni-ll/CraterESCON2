@@ -60,7 +60,7 @@ class ESCON2:
         self.write_sdo(ObjectIndex.MODE_OF_OPERATION, 0x00, bytes([mode.value]))
         self.current_mode = mode
 
-  def configure_profile_ramps(self, accel_rpm_s: int, decel_rpm_s: int) -> None:
+    def configure_profile_ramps(self, accel_rpm_s: int, decel_rpm_s: int) -> None:
         print(f"[NODE {self.node_id}] configuring ramps: Accel={accel_rpm_s}, Decel={decel_rpm_s}") # or is that done in escon studio already
         self.write_sdo(ObjectIndex.PROFILE_ACCELERATION, 0x00, accel_rpm_s.to_bytes(4, 'little', signed=False))
         time.sleep(0.02)
