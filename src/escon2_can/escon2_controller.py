@@ -5,7 +5,7 @@ from typing import Optional
 from .adapter import USB2CANAdapter, CANFrame
 from .constants import ObjectIndex, OpMode, ControlCommand
 
-_SDO_TIMEOUT = 0.100  # 100ms
+_SDO_TIMEOUT = 0.100 
 _SDO_DOWNLOAD_ACK = 0x60
 _SDO_ABORT = 0x80
 _ABORT_CODES = {0x05040001: "Client/server command specifier not valid or unknown"}
@@ -31,16 +31,19 @@ class ESCON2:
     def _on_message(self, frame: CANFrame) -> None:
         if frame.id == self.tx_sdo_id:
             command_byte = frame.data[0]
-            if command_byte in [0x4F, 0x4B, 0x43]:
-                index = struct.unpack('<H', frame.data[1:3])[0]
-                if index == ObjectIndex.STATUSWORD:
-                    self.statusword = struct.unpack('<H', frame.data[4:6])[0]
-                elif index == ObjectIndex.VELOCITY_ACTUAL:
-                    self.actual_velocity = struct.unpack('<i', frame.data[4:8])[0]
+            index = struct.unpack('<H', frame.data[1:3])[0]
+        
+            if index == ObjectIndex.STATUSWORD.value:
+                self.statusword = struct.unpack('<H', frame.data[4:6])[0]
+            elif index == ObjectIndex.VELOCITY_ACTUAL.value:
+                self.actual_velocity = struct.unpack('<i', frame.data[4:8])[0]
+            elif command_byte == 0x80:
+                abort_code = struct.unpack('<I', frame.data[4:8])[0]
+            print(f"!! SDO ABORT on index {hex(index)}: {hex(abort_code)} !!")
         elif frame.id == self.tx_pdo_id:
             self.statusword = struct.unpack('<H', frame.data[0:2])[0]
             self.actual_velocity = struct.unpack('<i', frame.data[2:6])[0]
-
+                
     def write_sdo(self, index: ObjectIndex, subindex: int, data: bytes) -> None:
         size = len(data)
         command_byte = 0x23 | ((4 - size) << 2)
@@ -50,18 +53,24 @@ class ESCON2:
         payload.append(subindex)
 
         payload += data.ljust(4, b'\x00') 
+        self.bus.send(self.rx_sdo_id, list(payload))
+        time.sleep(0.1)
+    
+    def read_sdo(self, index: ObjectIndex, subindex: int) -> None:
+
+        payload = [0x40] + list(struct.pack('<H', index.value)) + [subindex] + [0,0,0,0]
+        self.bus.send(self.rx_sdo_id, payload)
         
     def nmt_start(self) -> None:
         # pre-op to op mode
-        print(f"[node {self.node_id}] starting nmt command")
+        print(f"[NODE {self.node_id}] starting nmt command")
         self.bus.send(0x000, [0x01, self.node_id])
 
     def reset_fault(self) -> None:
         print(f"[NODE {self.node_id}] resetting faults...")
         self.write_sdo(ObjectIndex.CONTROLWORD, 0x00, int(0x0000).to_bytes(2, 'little'))
-        time.sleep(0.05)
-        self.write_sdo(ObjectIndex.CONTROLWORD, 0x00, ControlCommand.FAULT_RESET.value.to_bytes(2, 'little'))
-        time.sleep(0.1)
+        time.sleep(1)
+        
 
     def set_mode(self, mode: OpMode) -> None:
         print(f"[NODE {self.node_id}] setting mode to {mode.name}")
@@ -71,14 +80,23 @@ class ESCON2:
     def configure_profile_ramps(self, accel_rpm_s: int, decel_rpm_s: int) -> None:
         print(f"[NODE {self.node_id}] configuring ramps: accel={accel_rpm_s}, decel={decel_rpm_s}") # or is that done in escon studio already
         self.write_sdo(ObjectIndex.PROFILE_ACCELERATION, 0x00, accel_rpm_s.to_bytes(4, 'little', signed=False))
-        time.sleep(0.02)
+        time.sleep(0.2)
         self.write_sdo(ObjectIndex.PROFILE_DECELERATION, 0x00, decel_rpm_s.to_bytes(4, 'little', signed=False))
     
     def enable(self) -> None:
         print(f"[NODE {self.node_id}] enabling drive motor...")
-        for cmd in [ControlCommand.SHUTDOWN, ControlCommand.SWITCH_ON, ControlCommand.ENABLE_OPERATION]:
+        commands = [
+        ControlCommand.SHUTDOWN,       
+        ControlCommand.SWITCH_ON,  
+        ControlCommand.ENABLE_OPERATION 
+        ]
+    
+        for cmd in commands:
+            print(f"  sending {cmd.name}: {hex(cmd.value)}")
             self.write_sdo(ObjectIndex.CONTROLWORD, 0x00, cmd.value.to_bytes(2, 'little'))
-            time.sleep(0.05)
+            time.sleep(0.5)
+            self.read_sdo(ObjectIndex.STATUSWORD, 0x00)
+            time.sleep(0.5)
 
     def disable(self) -> None:
         print(f"[NODE {self.node_id}] disabling drive motor...")
@@ -88,6 +106,16 @@ class ESCON2:
         if self.current_mode == OpMode.PROFILE_VELOCITY:
             data = rpm.to_bytes(4, byteorder='little', signed=True)
             self.write_sdo(ObjectIndex.TARGET_VELOCITY, 0x00, data)
+            enable_cmd = 0x000F
+            new_setpoint_cmd = 0x001F 
+        
+            self.write_sdo(ObjectIndex.CONTROLWORD, 0x00, enable_cmd.to_bytes(2, 'little'))
+            time.sleep(0.02)
+            
+        
+            self.write_sdo(ObjectIndex.CONTROLWORD, 0x00, new_setpoint_cmd.to_bytes(2, 'little'))
+                
+            # self.write_sdo(ObjectIndex.CONTROLWORD, 0x00, int(0x000F).to_bytes(2, 'little'))
             
         elif self.current_mode == OpMode.CYCLIC_SYNC_VELOCITY:
             payload = list(struct.pack('<i', int(rpm)))

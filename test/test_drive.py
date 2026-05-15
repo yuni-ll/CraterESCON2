@@ -4,7 +4,7 @@ import time
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../src')))
 
-from escon2_can import USB2CANAdapter, ESCON2, OpMode
+from escon2_can import USB2CANAdapter, ESCON2, OpMode, ObjectIndex
 
 # check device manager
 PORT = 'COM11' 
@@ -35,23 +35,29 @@ def main():
         print("\n enabling motor chain...")
         for drive in drives:
             drive.reset_fault()
-            time.sleep(0.05)
+            time.sleep(1)
           
             drive.set_mode(OpMode.PROFILE_VELOCITY)
           
-            drive.configure_profile_ramps(accel_rpm_s=500, decel_rpm_s=500)
-
+            drive.configure_profile_ramps(accel_rpm_s=10000, decel_rpm_s=10000)
+        
             drive.enable()
         time.sleep(1.0)
 
         print("\n commanding velocity targets: ")
         # drive1.set_velocity(500)
         # drive2.set_velocity(500)
-        drive3.set_velocity(300)
+        drive3.set_velocity(500)
+        
         # drive4.set_velocity(-500)
         
         print("\n streaming: ")
         for _ in range(50):
+            
+            time.sleep(0.1)
+            drive3.read_sdo(ObjectIndex.STATUSWORD, 0x00)
+            time.sleep(0.1)
+            drive3.read_sdo(ObjectIndex.VELOCITY_ACTUAL, 0x00)
             # s1 = hex(drive1.statusword).upper().ljust(6)
             # s2 = hex(drive2.statusword).upper().ljust(6)
             s3 = hex(drive3.statusword).upper().ljust(6)

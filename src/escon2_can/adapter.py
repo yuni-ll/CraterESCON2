@@ -21,7 +21,7 @@ class CANFrame:
         return f"CANFrame(id={hex(self.id)}, data={self.data.hex(' ')})"
 
 class USB2CANAdapter:
-    def __init__(self, port: str, baud: int = 500000) -> None:
+    def __init__(self, port: str, baud: int = 2000000) -> None:
         self.ser: serial.Serial = serial.Serial(port, baud, timeout=0.01)
         self._callback: Optional[Callable[[CANFrame], None]] = None
         self._running: bool = False
@@ -46,45 +46,29 @@ class USB2CANAdapter:
         self.ser.write(frame)
 
     def _listen(self) -> None:
-        buf = bytearray()
         while self._running:
+            if self.ser.in_waiting < _FRAME_LEN:
+                time.sleep(0.001)
+                continue
+            
             b = self.ser.read(1)
-            if not b:
-                continue
-            if b[0] != 0xAA:
-                continue
- 
+            if b != b'\xAA': continue
             b = self.ser.read(1)
-            if not b:
-                continue
-            if b[0] != 0x55:
-                continue
- 
+            if b != b'\x55': continue
+
             body = self.ser.read(18)
-            if len(body) < 18:
-                continue
- 
-            full_frame = bytearray(_SOF) + bytearray(body)
- 
-            expected_cs = sum(full_frame[_CHECKSUM_RANGE]) & 0xFF
-            actual_cs = full_frame[19]
-            if expected_cs != actual_cs:
-                print(f"[USB2CAN] checksum error: expected {expected_cs:#04x}, got {actual_cs:#04x} - dropping frame")
-                continue
- 
-            msg_id = struct.unpack('<I', full_frame[_ID_OFFSET:_ID_OFFSET + 4])[0]
-            dlc = full_frame[_DLC_OFFSET]
-            if dlc > 8:
-                print(f"[USB2CAN] invalid dlc {dlc} — dropping frame")
-                continue
- 
-            frame = CANFrame(id=msg_id, data=bytes(full_frame[_DATA_OFFSET:_DATA_OFFSET + dlc]))
- 
+            if len(body) < 18: continue
+
+            full_frame = b'\xAA\x55' + body
+        
+            msg_id = struct.unpack('<I', full_frame[5:9])[0]
+            dlc = full_frame[9]
+            data = full_frame[10:10+dlc]
+            
+            frame = CANFrame(id=msg_id, data=data)
+
             if self._callback:
-                try:
-                    self._callback(frame)
-                except Exception as exc:
-                    print(f"[USB2CAN] callback raised: {exc}")
+                self._callback(frame)
 
     def listen(self, callback_func: Callable[[CANFrame], None]) -> None:
         if self._running:

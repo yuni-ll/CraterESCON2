@@ -31,4 +31,4 @@ class ControlCommand(IntEnum):
     QUICK_STOP = 0x0002
     FAULT_RESET = 0x0080 
     HALT_VELOCITY = 0x010F
-    HALT = 0x010F
+    # HALT = 0x010F
