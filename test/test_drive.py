@@ -7,18 +7,18 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../s
 from escon2_can import USB2CANAdapter, ESCON2, OpMode
 
 # check device manager
-PORT = 'COMx' 
+PORT = 'COM11' 
 
 def main():
     NODE1, NODE2, NODE3, NODE4 = 1, 2, 3, 4
     print(f"initializing bus on port: {PORT}...")
     bus = USB2CANAdapter(port=PORT)
-    drive1 = ESCON2(bus=bus, node_id=NODE1)
-    drive2 = ESCON2(bus=bus, node_id=NODE2)
+    # drive1 = ESCON2(bus=bus, node_id=NODE1)
+    # drive2 = ESCON2(bus=bus, node_id=NODE2)
     drive3 = ESCON2(bus=bus, node_id=NODE3)
-    drive4 = ESCON2(bus=bus, node_id=NODE4)
+    # drive4 = ESCON2(bus=bus, node_id=NODE4)
   
-    drives = [drive1, drive2, drive3, drive4]
+    drives = [drive3]
 
     def master_bus_callback(frame):
         for drive in drives:
@@ -45,24 +45,24 @@ def main():
         time.sleep(1.0)
 
         print("\n commanding velocity targets: ")
-        drive1.set_velocity(500)
-        drive2.set_velocity(500)
+        # drive1.set_velocity(500)
+        # drive2.set_velocity(500)
         drive3.set_velocity(300)
-        drive4.set_velocity(-500)
+        # drive4.set_velocity(-500)
         
         print("\n streaming: ")
         for _ in range(50):
-            s1 = hex(drive1.statusword).upper().ljust(6)
-            s2 = hex(drive2.statusword).upper().ljust(6)
+            # s1 = hex(drive1.statusword).upper().ljust(6)
+            # s2 = hex(drive2.statusword).upper().ljust(6)
             s3 = hex(drive3.statusword).upper().ljust(6)
-            s4 = hex(drive4.statusword).upper().ljust(6)
+            # s4 = hex(drive4.statusword).upper().ljust(6)
             
-            v1 = drive1.actual_velocity
-            v2 = drive2.actual_velocity
+            # v1 = drive1.actual_velocity
+            # v2 = drive2.actual_velocity
             v3 = drive3.actual_velocity
-            v4 = drive4.actual_velocity
+            # v4 = drive4.actual_velocity
             
-            print(f"status | node1: {s1} (v: {v1}) | node2: {s2} (v: {v2}) | node3: {s3} (v: {v3}) | node4: {s4} (v: {v4})")
+            print(f"status | node3: {s3} (v: {v3})") # | node2: {s2} (v: {v2}) | node3: {s3} (v: {v3}) | node4: {s4} (v: {v4})")
             time.sleep(0.1) 
             
         print("\n decelerating... ")

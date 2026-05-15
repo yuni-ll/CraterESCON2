@@ -21,7 +21,7 @@ class CANFrame:
         return f"CANFrame(id={hex(self.id)}, data={self.data.hex(' ')})"
 
 class USB2CANAdapter:
-    def __init__(self, port: str, baud: int = 2000000) -> None:
+    def __init__(self, port: str, baud: int = 500000) -> None:
         self.ser: serial.Serial = serial.Serial(port, baud, timeout=0.01)
         self._callback: Optional[Callable[[CANFrame], None]] = None
         self._running: bool = False
