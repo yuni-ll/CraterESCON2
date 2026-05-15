@@ -1,8 +1,14 @@
 import time
+import threading
 import struct
 from typing import Optional
 from .adapter import USB2CANAdapter, CANFrame
 from .constants import ObjectIndex, OpMode, ControlCommand
+
+_SDO_TIMEOUT = 0.100  # 100ms
+_SDO_DOWNLOAD_ACK = 0x60
+_SDO_ABORT = 0x80
+_ABORT_CODES = {0x05040001: "Client/server command specifier not valid or unknown"}
 
 class ESCON2:
     def __init__(self, bus: USB2CANAdapter, node_id: int) -> None:
@@ -13,6 +19,9 @@ class ESCON2:
         self.rx_sdo_id: int = 0x600 + node_id
         self.rx_pdo_id: int = 0x200 + node_id 
         self.tx_pdo_id: int = 0x180 + node_id
+
+        self._sdo_event = threading.Event()
+        self._sdo_response: Optional[CANFrame] = None
 
         self.current_mode: Optional[OpMode] = None
         self.statusword: int = 0x0000
@@ -36,47 +45,11 @@ class ESCON2:
         size = len(data)
         command_byte = 0x23 | ((4 - size) << 2)
         
-        payload = bytearray(8)
-        payload[0] = command_byte
-        struct.pack_into('<H', payload, 1, index.value)
-        payload[3] = subindex
-        payload[4:4 + size] = data 
-        
-        self._sdo_event.clear()
-        self._sdo_response = None
- 
-        self.bus.send(self.rx_sdo_id, list(payload))
-        
-        responded = self._sdo_event.wait(timeout=_SDO_TIMEOUT)
- 
-        if not responded:
-            raise TimeoutError(
-                f"[node {self.node_id}] SDO timeout: no response for "
-                f"index={index.name}({index.value:#06x}) sub={subindex:#04x}"
-            )
- 
-        resp = self._sdo_response
-        if resp is None or len(resp.data) < 1:
-            raise RuntimeError(f"[NODE {self.node_id}] no proper sdo response")
- 
-        cmd = resp.data[0]
- 
-        if cmd == _SDO_ABORT:
-            abort_code = 0
-            if len(resp.data) >= 8:
-                abort_code = struct.unpack('<I', resp.data[4:8])[0]
-            description = _ABORT_CODES.get(abort_code, "unknown abort code")
-            raise RuntimeError(
-                f"[node {self.node_id}] sdo abort for "
-                f"index={index.name}({index.value:#06x}) sub={subindex:#04x}: "
-                f"{description} ({abort_code:#010x})"
-            )
- 
-        if cmd != _SDO_DOWNLOAD_ACK:
-            raise RuntimeError(
-                f"[node {self.node_id}] unexpected sdo response cmd={cmd:#04x} "
-                f"for index={index.name}({index.value:#06x})"
-            )
+        payload = bytearray([command_byte])
+        payload += struct.pack('<H', index.value)
+        payload.append(subindex)
+
+        payload += data.ljust(4, b'\x00') 
         
     def nmt_start(self) -> None:
         # pre-op to op mode
